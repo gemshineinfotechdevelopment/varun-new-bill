@@ -22,7 +22,7 @@ import settingsRoutes from './routes/settingsRoutes';
 import { seedDefaultAdmin } from './controllers/authController';
 
 const app: Application = express();
-const PORT = process.env.PORT || 5004;
+const PORT = process.env.PORT || 5011;
 
 // Connect Database & Seed default admin
 connectDB().then(() => {
@@ -37,12 +37,16 @@ const envOrigins = (process.env.CORS_ORIGIN || '')
 
 const allowedOrigins = [
   ...envOrigins,
+  'https://varun-traders-billing.gemshine.tech',
+  'http://varun-traders-billing.gemshine.tech',
   'http://localhost:5000',
   'http://127.0.0.1:5000',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:5174',
   'http://127.0.0.1:5174',
+  'http://localhost:5011',
+  'http://127.0.0.1:5011',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ];
