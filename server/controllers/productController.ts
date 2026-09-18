@@ -37,6 +37,10 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
 
       if (!existingPrice && cleanName) {
         const totalCount = await PriceList.countDocuments();
+        const shopStockVal = Number(product.shopStock || 0);
+        const godownStockVal = Number(product.godownStock || 0);
+        const stockVal = Number(product.stock || (shopStockVal + godownStockVal) || 0);
+
         await PriceList.create({
           slNo: totalCount + 1,
           itemName: cleanName,
@@ -44,7 +48,9 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
           unit: product.unit || 'Box',
           mrp: product.mrp || 0,
           rate: product.rate || 0,
-          stock: 0,
+          shopStock: shopStockVal,
+          godownStock: godownStockVal,
+          stock: stockVal,
           effectiveDate: new Date().toISOString().split('T')[0],
           batchName: 'Product Sync',
         });
@@ -89,6 +95,8 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
           ...(product.unit && { unit: product.unit }),
           ...(product.rate !== undefined && { rate: Number(product.rate) }),
           ...(product.mrp !== undefined && { mrp: Number(product.mrp) }),
+          ...(product.shopStock !== undefined && { shopStock: Number(product.shopStock) }),
+          ...(product.godownStock !== undefined && { godownStock: Number(product.godownStock) }),
           ...(product.stock !== undefined && { stock: Number(product.stock) }),
         }
       );

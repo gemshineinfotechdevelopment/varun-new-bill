@@ -47,6 +47,9 @@ export interface ProductItem {
   rate?: number;
   mrp?: number;
   unit?: string;
+  shopStock?: number;
+  godownStock?: number;
+  stock?: number;
 }
 
 export const ProductsPage: FC = () => {
@@ -64,6 +67,8 @@ export const ProductsPage: FC = () => {
   const [productUnit, setProductUnit] = useState('Box');
   const [productRate, setProductRate] = useState<string>('0');
   const [productMrp, setProductMrp] = useState<string>('0');
+  const [productShopStock, setProductShopStock] = useState<string>('0');
+  const [productGodownStock, setProductGodownStock] = useState<string>('0');
   const [modalLoading, setModalLoading] = useState(false);
 
   const fetchProductsAndPrices = async () => {
@@ -84,7 +89,7 @@ export const ProductsPage: FC = () => {
         });
       }
 
-      // Merge product list with price list data so latest amounts are always reflected
+      // Merge product list with price list data so latest amounts and stocks are always reflected
       let mergedProducts: ProductItem[] = [];
       const seenNames = new Set<string>();
 
@@ -93,6 +98,10 @@ export const ProductsPage: FC = () => {
           const key = (p.name || '').toLowerCase().trim();
           seenNames.add(key);
           const priceItem = priceMap.get(key);
+          const shopStock = priceItem?.shopStock !== undefined ? priceItem.shopStock : (p.shopStock || 0);
+          const godownStock = priceItem?.godownStock !== undefined ? priceItem.godownStock : (p.godownStock || 0);
+          const totalStock = priceItem?.stock !== undefined ? priceItem.stock : (p.stock !== undefined ? p.stock : (shopStock + godownStock));
+
           mergedProducts.push({
             _id: p._id || p.id,
             id: p._id || p.id,
@@ -102,6 +111,9 @@ export const ProductsPage: FC = () => {
             rate: priceItem?.rate !== undefined ? priceItem.rate : (p.rate || 0),
             mrp: priceItem?.mrp !== undefined ? priceItem.mrp : (p.mrp || 0),
             unit: priceItem?.unit || p.unit || 'Box',
+            shopStock,
+            godownStock,
+            stock: totalStock,
           });
         });
       }
@@ -114,6 +126,10 @@ export const ProductsPage: FC = () => {
           if (key && !seenNames.has(key)) {
             maxSlNo += 1;
             seenNames.add(key);
+            const shopStock = pItem.shopStock || 0;
+            const godownStock = pItem.godownStock || 0;
+            const totalStock = pItem.stock !== undefined ? pItem.stock : (shopStock + godownStock);
+
             mergedProducts.push({
               _id: pItem._id || pItem.id,
               id: pItem._id || pItem.id,
@@ -123,6 +139,9 @@ export const ProductsPage: FC = () => {
               rate: pItem.rate || 0,
               mrp: pItem.mrp || 0,
               unit: pItem.unit || 'Box',
+              shopStock,
+              godownStock,
+              stock: totalStock,
             });
           }
         });
@@ -164,6 +183,8 @@ export const ProductsPage: FC = () => {
     setProductUnit('Box');
     setProductRate('0');
     setProductMrp('0');
+    setProductShopStock('0');
+    setProductGodownStock('0');
     setOpenModal(true);
   };
 
@@ -174,6 +195,8 @@ export const ProductsPage: FC = () => {
     setProductUnit(product.unit || 'Box');
     setProductRate(String(product.rate || 0));
     setProductMrp(String(product.mrp || 0));
+    setProductShopStock(String(product.shopStock || 0));
+    setProductGodownStock(String(product.godownStock || 0));
     setOpenModal(true);
   };
 
@@ -185,12 +208,19 @@ export const ProductsPage: FC = () => {
 
     try {
       setModalLoading(true);
+      const shopStockVal = Number(productShopStock) || 0;
+      const godownStockVal = Number(productGodownStock) || 0;
+      const totalStockVal = shopStockVal + godownStockVal;
+
       const payload = {
         name: productName.trim(),
         category: productCategory,
         unit: productUnit,
         rate: Number(productRate) || 0,
         mrp: Number(productMrp) || 0,
+        shopStock: shopStockVal,
+        godownStock: godownStockVal,
+        stock: totalStockVal,
       };
 
       if (editingProduct) {
@@ -687,7 +717,7 @@ export const ProductsPage: FC = () => {
                     letterSpacing: '0.04em',
                     backgroundColor: '#FFFBEB',
                     borderBottom: '2px solid #FDE68A',
-                    width: '120px',
+                    width: '110px',
                   }}
                 >
                   MRP (₹)
@@ -696,14 +726,14 @@ export const ProductsPage: FC = () => {
                   align="right"
                   sx={{
                     py: 1.5,
-                    px: { xs: 2, sm: 3 },
+                    px: { xs: 2, sm: 2.5 },
                     fontSize: '12px',
                     fontWeight: 800,
                     color: '#7C2D12',
                     letterSpacing: '0.04em',
                     backgroundColor: '#FFFBEB',
                     borderBottom: '2px solid #FDE68A',
-                    width: '140px',
+                    width: '130px',
                   }}
                 >
                   RATE / PRICE (₹)
@@ -712,14 +742,62 @@ export const ProductsPage: FC = () => {
                   align="center"
                   sx={{
                     py: 1.5,
-                    px: { xs: 1.5, sm: 2.5 },
+                    px: 1.5,
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#1E40AF',
+                    letterSpacing: '0.04em',
+                    backgroundColor: '#EFF6FF',
+                    borderBottom: '2px solid #BFDBFE',
+                    width: '110px',
+                  }}
+                >
+                  SHOP STOCK
+                </TableCell>
+                <TableCell
+                  align="center"
+                  sx={{
+                    py: 1.5,
+                    px: 1.5,
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#065F46',
+                    letterSpacing: '0.04em',
+                    backgroundColor: '#ECFDF5',
+                    borderBottom: '2px solid #A7F3D0',
+                    width: '110px',
+                  }}
+                >
+                  GODOWN STOCK
+                </TableCell>
+                <TableCell
+                  align="center"
+                  sx={{
+                    py: 1.5,
+                    px: 1.5,
                     fontSize: '12px',
                     fontWeight: 800,
                     color: '#7C2D12',
                     letterSpacing: '0.04em',
                     backgroundColor: '#FFFBEB',
                     borderBottom: '2px solid #FDE68A',
-                    width: '70px',
+                    width: '100px',
+                  }}
+                >
+                  TOTAL STOCK
+                </TableCell>
+                <TableCell
+                  align="center"
+                  sx={{
+                    py: 1.5,
+                    px: { xs: 1, sm: 2 },
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#7C2D12',
+                    letterSpacing: '0.04em',
+                    backgroundColor: '#FFFBEB',
+                    borderBottom: '2px solid #FDE68A',
+                    width: '65px',
                   }}
                 >
                   EDIT
@@ -728,14 +806,14 @@ export const ProductsPage: FC = () => {
                   align="center"
                   sx={{
                     py: 1.5,
-                    px: { xs: 1.5, sm: 2.5 },
+                    px: { xs: 1, sm: 2 },
                     fontSize: '12px',
                     fontWeight: 800,
                     color: '#7C2D12',
                     letterSpacing: '0.04em',
                     backgroundColor: '#FFFBEB',
                     borderBottom: '2px solid #FDE68A',
-                    width: '70px',
+                    width: '65px',
                   }}
                 >
                   DELETE
@@ -745,13 +823,13 @@ export const ProductsPage: FC = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={12} align="center" sx={{ py: 6 }}>
                     <CircularProgress size={32} sx={{ color: '#DC2626' }} />
                   </TableCell>
                 </TableRow>
               ) : filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 6, color: '#786C58' }}>
+                  <TableCell colSpan={12} align="center" sx={{ py: 6, color: '#786C58' }}>
                     {searchTerm ? (
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                         <Typography sx={{ fontSize: '14px', color: '#786C58', fontWeight: 500 }}>
@@ -775,6 +853,10 @@ export const ProductsPage: FC = () => {
                   const prodId = product._id || product.id || String(index);
                   const isSelected = selectedIds.includes(prodId);
                   const isLast = index === filteredProducts.length - 1;
+                  const shopStockVal = product.shopStock || 0;
+                  const godownStockVal = product.godownStock || 0;
+                  const totalStockVal = product.stock !== undefined ? product.stock : (shopStockVal + godownStockVal);
+
                   return (
                     <TableRow
                       key={prodId}
@@ -882,7 +964,7 @@ export const ProductsPage: FC = () => {
                         align="right"
                         sx={{
                           py: 1.4,
-                          px: { xs: 2, sm: 3 },
+                          px: { xs: 2, sm: 2.5 },
                           fontSize: '14.5px',
                           fontWeight: 800,
                           color: '#B91C1C',
@@ -892,12 +974,84 @@ export const ProductsPage: FC = () => {
                         ₹{Number(product.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
 
+                      {/* Shop Stock Cell */}
+                      <TableCell
+                        align="center"
+                        sx={{
+                          py: 1.4,
+                          px: 1.5,
+                          borderBottom: isLast ? 'none' : '1px solid #F7EEDB',
+                        }}
+                      >
+                        <Chip
+                          label={shopStockVal}
+                          size="small"
+                          sx={{
+                            fontWeight: 800,
+                            fontSize: '12px',
+                            backgroundColor: shopStockVal > 0 ? '#EFF6FF' : '#F3F4F6',
+                            color: shopStockVal > 0 ? '#1D4ED8' : '#9CA3AF',
+                            border: `1px solid ${shopStockVal > 0 ? '#BFDBFE' : '#E5E7EB'}`,
+                            borderRadius: '6px',
+                            minWidth: '42px',
+                          }}
+                        />
+                      </TableCell>
+
+                      {/* Godown Stock Cell */}
+                      <TableCell
+                        align="center"
+                        sx={{
+                          py: 1.4,
+                          px: 1.5,
+                          borderBottom: isLast ? 'none' : '1px solid #F7EEDB',
+                        }}
+                      >
+                        <Chip
+                          label={godownStockVal}
+                          size="small"
+                          sx={{
+                            fontWeight: 800,
+                            fontSize: '12px',
+                            backgroundColor: godownStockVal > 0 ? '#ECFDF5' : '#F3F4F6',
+                            color: godownStockVal > 0 ? '#047857' : '#9CA3AF',
+                            border: `1px solid ${godownStockVal > 0 ? '#A7F3D0' : '#E5E7EB'}`,
+                            borderRadius: '6px',
+                            minWidth: '42px',
+                          }}
+                        />
+                      </TableCell>
+
+                      {/* Total Stock Cell */}
+                      <TableCell
+                        align="center"
+                        sx={{
+                          py: 1.4,
+                          px: 1.5,
+                          borderBottom: isLast ? 'none' : '1px solid #F7EEDB',
+                        }}
+                      >
+                        <Chip
+                          label={totalStockVal}
+                          size="small"
+                          sx={{
+                            fontWeight: 800,
+                            fontSize: '12px',
+                            backgroundColor: totalStockVal > 0 ? '#FEF3C7' : '#FEE2E2',
+                            color: totalStockVal > 0 ? '#B45309' : '#DC2626',
+                            border: `1px solid ${totalStockVal > 0 ? '#FDE68A' : '#FECACA'}`,
+                            borderRadius: '6px',
+                            minWidth: '46px',
+                          }}
+                        />
+                      </TableCell>
+
                       {/* Edit Button */}
                       <TableCell
                         align="center"
                         sx={{
                           py: 1.4,
-                          px: { xs: 1.5, sm: 2.5 },
+                          px: { xs: 1, sm: 2 },
                           borderBottom: isLast ? 'none' : '1px solid #F7EEDB',
                         }}
                       >
@@ -929,7 +1083,7 @@ export const ProductsPage: FC = () => {
                         align="center"
                         sx={{
                           py: 1.4,
-                          px: { xs: 1.5, sm: 2.5 },
+                          px: { xs: 1, sm: 2 },
                           borderBottom: isLast ? 'none' : '1px solid #F7EEDB',
                         }}
                       >
@@ -1121,6 +1275,38 @@ export const ProductsPage: FC = () => {
                 value={productRate}
                 onChange={(e) => setProductRate(e.target.value)}
                 slotProps={{ input: { sx: { fontSize: '14px', fontWeight: 800, color: '#B91C1C' } } }}
+              />
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#1E40AF', mb: 0.6 }}>
+                🏪 Shop Stock (Counter)
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                placeholder="0"
+                value={productShopStock}
+                onChange={(e) => setProductShopStock(e.target.value)}
+                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 700, color: '#1E40AF' } } }}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#065F46', mb: 0.6 }}>
+                🏢 Godown Stock (Warehouse)
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                placeholder="0"
+                value={productGodownStock}
+                onChange={(e) => setProductGodownStock(e.target.value)}
+                slotProps={{ input: { sx: { fontSize: '13.5px', fontWeight: 700, color: '#065F46' } } }}
               />
             </Grid>
           </Grid>

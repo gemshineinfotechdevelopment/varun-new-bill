@@ -8,6 +8,8 @@ export interface IPriceListItem extends Document {
   mrp: number;
   discountPercent?: number;
   rate: number;
+  shopStock?: number;
+  godownStock?: number;
   stock?: number;
   effectiveDate?: string;
   batchName?: string;
@@ -47,6 +49,14 @@ const PriceListItemSchema: Schema = new Schema(
     rate: {
       type: Number,
       required: [true, 'Rate/Price is required'],
+      default: 0,
+    },
+    shopStock: {
+      type: Number,
+      default: 0,
+    },
+    godownStock: {
+      type: Number,
       default: 0,
     },
     stock: {

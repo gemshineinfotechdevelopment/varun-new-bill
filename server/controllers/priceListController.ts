@@ -77,9 +77,19 @@ const syncCategoriesAndProducts = async (items: any[]) => {
       const mrpVal = Number(item.mrp || 0);
       const unitVal = cleanToEnglish(String(item.unit || 'Box')) || 'Box';
       const catVal = cleanToEnglish(String(item.category || 'General')) || 'General';
+      let shopStockVal = Number(item.shopStock ?? item.shop_stock ?? item['Shop Stock'] ?? item['Shop'] ?? item['Shop Qty'] ?? 0);
+      const godownStockVal = Number(item.godownStock ?? item.godown_stock ?? item['Godown Stock'] ?? item['Godown'] ?? item['Godown Qty'] ?? 0);
+      let stockVal = Number(item.stock ?? item.Stock ?? item['Qty'] ?? item['Total Stock'] ?? (shopStockVal + godownStockVal));
+
+      if (stockVal === 0 && (shopStockVal > 0 || godownStockVal > 0)) {
+        stockVal = shopStockVal + godownStockVal;
+      }
+      if (shopStockVal === 0 && godownStockVal === 0 && stockVal > 0) {
+        shopStockVal = stockVal;
+      }
 
       if (existingProdMap.has(nameKey)) {
-        // Update product rate/category
+        // Update product rate/category/stock
         const existing = existingProdMap.get(nameKey);
         if (existing) {
           await Product.findByIdAndUpdate(existing._id, {
@@ -87,6 +97,9 @@ const syncCategoriesAndProducts = async (items: any[]) => {
             rate: rateVal,
             mrp: mrpVal,
             unit: unitVal,
+            shopStock: shopStockVal,
+            godownStock: godownStockVal,
+            stock: stockVal,
           });
         }
       } else {
@@ -99,6 +112,9 @@ const syncCategoriesAndProducts = async (items: any[]) => {
           rate: rateVal,
           mrp: mrpVal,
           unit: unitVal,
+          shopStock: shopStockVal,
+          godownStock: godownStockVal,
+          stock: stockVal,
         });
         existingProdMap.set(nameKey, created);
       }
@@ -142,7 +158,7 @@ export const getPriceList = async (req: Request, res: Response): Promise<void> =
 
 export const createPriceListItem = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { itemName, category, unit, mrp, discountPercent, rate, stock, effectiveDate, batchName, slNo } = req.body;
+    const { itemName, category, unit, mrp, discountPercent, rate, shopStock, godownStock, stock, effectiveDate, batchName, slNo } = req.body;
 
     if (!itemName || !itemName.trim()) {
       res.status(400).json({ success: false, error: 'Item name is required' });
@@ -150,6 +166,12 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
     }
 
     const nextSlNo = slNo || (await PriceList.countDocuments()) + 1;
+    const shopStockVal = Number(shopStock || 0);
+    const godownStockVal = Number(godownStock || 0);
+    let totalStockVal = Number(stock || (shopStockVal + godownStockVal) || 0);
+    if (totalStockVal === 0 && (shopStockVal > 0 || godownStockVal > 0)) {
+      totalStockVal = shopStockVal + godownStockVal;
+    }
 
     const item = await PriceList.create({
       slNo: nextSlNo,
@@ -159,7 +181,9 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
       mrp: Number(mrp) || 0,
       discountPercent: Number(discountPercent) || 0,
       rate: Number(rate) || 0,
-      stock: Number(stock) || 0,
+      shopStock: shopStockVal,
+      godownStock: godownStockVal,
+      stock: totalStockVal,
       effectiveDate: effectiveDate || new Date().toISOString().split('T')[0],
       batchName: batchName || 'Manual Entry',
     });
@@ -190,18 +214,39 @@ export const bulkImportPriceList = async (req: Request, res: Response): Promise<
     const currentCount = replaceExisting ? 0 : await PriceList.countDocuments();
     const batchTitle = batchName || `Upload-${new Date().toLocaleDateString('en-GB')}`;
 
-    const formattedItems = items.map((item: any, idx: number) => ({
-      slNo: item.slNo || currentCount + idx + 1,
-      itemName: cleanToEnglish(String(item.itemName || item.name || item['Product Name'] || item['Item Name'] || '')),
-      category: cleanToEnglish(String(item.category || item.Category || 'General')) || 'General',
-      unit: cleanToEnglish(String(item.unit || item.Unit || 'Box')) || 'Box',
-      mrp: Number(item.mrp || item.MRP || item['M.R.P'] || 0),
-      discountPercent: Number(item.discountPercent || item.discount || item['Discount %'] || 0),
-      rate: Number(item.rate || item.price || item.Rate || item['Net Rate'] || item['Selling Price'] || 0),
-      stock: Number(item.stock || item.Stock || item['Qty'] || 0),
-      effectiveDate: item.effectiveDate || new Date().toISOString().split('T')[0],
-      batchName: batchTitle,
-    })).filter((i: any) => Boolean(i.itemName));
+    const formattedItems = items.map((item: any, idx: number) => {
+      const shopStock = Number(
+        item.shopStock ?? item.shop_stock ?? item['Shop Stock'] ?? item['Shop'] ?? item['SHOP'] ?? item['Shop Qty'] ?? item['Counter Stock'] ?? 0
+      );
+      const godownStock = Number(
+        item.godownStock ?? item.godown_stock ?? item['Godown Stock'] ?? item['Godown'] ?? item['GODOWN'] ?? item['Godown Qty'] ?? item['Warehouse'] ?? item['Go-down'] ?? 0
+      );
+      let totalStock = Number(
+        item.stock ?? item.Stock ?? item['Qty'] ?? item['Total Stock'] ?? item['TOTAL STOCK'] ?? (shopStock + godownStock)
+      );
+      if (totalStock === 0 && (shopStock > 0 || godownStock > 0)) {
+        totalStock = shopStock + godownStock;
+      }
+      if (shopStock === 0 && godownStock === 0 && totalStock > 0) {
+        // default to shop stock if only generic total stock was provided
+        // (so billing from shop stock works seamlessly)
+      }
+
+      return {
+        slNo: item.slNo || currentCount + idx + 1,
+        itemName: cleanToEnglish(String(item.itemName || item.name || item['Product Name'] || item['Item Name'] || '')),
+        category: cleanToEnglish(String(item.category || item.Category || 'General')) || 'General',
+        unit: cleanToEnglish(String(item.unit || item.Unit || 'Box')) || 'Box',
+        mrp: Number(item.mrp || item.MRP || item['M.R.P'] || 0),
+        discountPercent: Number(item.discountPercent || item.discount || item['Discount %'] || 0),
+        rate: Number(item.rate || item.price || item.Rate || item['Net Rate'] || item['Selling Price'] || 0),
+        shopStock,
+        godownStock,
+        stock: totalStock,
+        effectiveDate: item.effectiveDate || new Date().toISOString().split('T')[0],
+        batchName: batchTitle,
+      };
+    }).filter((i: any) => Boolean(i.itemName));
 
     if (formattedItems.length === 0) {
       res.status(400).json({ success: false, error: 'No valid items with names found in the uploaded file' });

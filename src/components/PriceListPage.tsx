@@ -68,6 +68,8 @@ export interface PriceItem {
   mrp: number;
   discountPercent?: number;
   rate: number;
+  shopStock?: number;
+  godownStock?: number;
   stock?: number;
   effectiveDate?: string;
   batchName?: string;
@@ -613,6 +615,8 @@ export const PriceListPage: FC = () => {
       let mrpCol = -1;
       let rateCol = -1;
       let discCol = -1;
+      let shopStockCol = -1;
+      let godownStockCol = -1;
       let stockCol = -1;
 
       for (let r = 0; r < rawRows.length; r++) {
@@ -639,6 +643,8 @@ export const PriceListPage: FC = () => {
             else if (c.includes('mrp') || c.includes('m.r.p') || c.includes('gross') || c.includes('box rate')) mrpCol = idx;
             else if (c.includes('disc') || c.includes('%')) discCol = idx;
             else if (c.includes('net') || c.includes('rate') || c.includes('price') || c.includes('selling') || c.includes('final')) rateCol = idx;
+            else if (c.includes('shop') || c.includes('counter') || c.includes('store')) shopStockCol = idx;
+            else if (c.includes('godown') || c.includes('warehouse') || c.includes('go-down')) godownStockCol = idx;
             else if (c.includes('stock') || c.includes('qty') || c.includes('quantity')) stockCol = idx;
           });
           continue;
@@ -658,7 +664,9 @@ export const PriceListPage: FC = () => {
         let itemMrp = 0;
         let itemRate = 0;
         let itemDisc = 0;
-        let itemStock = 100;
+        let itemShopStock = 0;
+        let itemGodownStock = 0;
+        let itemStock = 0;
         let itemSlNo = globalSlNo;
 
         // Choose best column: prefer explicit English column, or column with English characters
@@ -691,7 +699,13 @@ export const PriceListPage: FC = () => {
           if (mrpCol !== -1 && row[mrpCol]) itemMrp = Number(String(row[mrpCol]).replace(/[^\d.]/g, '')) || 0;
           if (rateCol !== -1 && row[rateCol]) itemRate = Number(String(row[rateCol]).replace(/[^\d.]/g, '')) || 0;
           if (discCol !== -1 && row[discCol]) itemDisc = Number(String(row[discCol]).replace(/[^\d.]/g, '')) || 0;
+          if (shopStockCol !== -1 && row[shopStockCol]) itemShopStock = Number(String(row[shopStockCol]).replace(/[^\d.]/g, '')) || 0;
+          if (godownStockCol !== -1 && row[godownStockCol]) itemGodownStock = Number(String(row[godownStockCol]).replace(/[^\d.]/g, '')) || 0;
           if (stockCol !== -1 && row[stockCol]) itemStock = Number(String(row[stockCol]).replace(/[^\d.]/g, '')) || 0;
+
+          if (itemStock === 0 && (itemShopStock > 0 || itemGodownStock > 0)) {
+            itemStock = itemShopStock + itemGodownStock;
+          }
         } else {
           // Freeform cells analysis: inspect text cells and prefer English characters
           const nonEmpty = row.map((c, i) => ({ val: String(c).trim(), idx: i })).filter((x) => x.val.length > 0);
@@ -739,7 +753,9 @@ export const PriceListPage: FC = () => {
             mrp: itemMrp || itemRate,
             discountPercent: itemDisc || (itemMrp > itemRate ? Math.round(((itemMrp - itemRate) / itemMrp) * 100) : 0),
             rate: itemRate,
-            stock: itemStock || 100,
+            shopStock: itemShopStock,
+            godownStock: itemGodownStock,
+            stock: itemStock || (itemShopStock + itemGodownStock) || 0,
           });
           globalSlNo++;
         }

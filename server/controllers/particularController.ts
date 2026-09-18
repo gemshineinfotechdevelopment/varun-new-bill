@@ -7,7 +7,7 @@ import { Product } from '../models/Product';
 import { escapeRegex, recalculateCustomerBalance } from '../utils/ledgerUtils';
 import { isCloudinaryConfigured, uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 
-// Helper to decrement (multiplier: -1) or increment/restore (multiplier: +1) stock in PriceList and Product collections
+// Helper to decrement (multiplier: -1) or increment/restore (multiplier: +1) shopStock and total stock in PriceList and Product collections
 const adjustStock = async (products: any[], multiplier: number): Promise<void> => {
   if (!Array.isArray(products) || products.length === 0) return;
 
@@ -23,16 +23,16 @@ const adjustStock = async (products: any[], multiplier: number): Promise<void> =
       const nameRegex = new RegExp(`^${escapedName}$`, 'i');
 
       try {
-        // Adjust stock in PriceList collection
+        // Adjust shopStock and total stock in PriceList collection
         await PriceList.updateMany(
           { itemName: { $regex: nameRegex } },
-          { $inc: { stock: change } }
+          { $inc: { shopStock: change, stock: change } }
         );
 
-        // Adjust stock in Product collection
+        // Adjust shopStock and total stock in Product collection
         await Product.updateMany(
           { name: { $regex: nameRegex } },
-          { $inc: { stock: change } }
+          { $inc: { shopStock: change, stock: change } }
         );
       } catch (err) {
         console.warn(`[Stock Adjustment Error] Could not update stock for "${cleanName}":`, err);
@@ -40,6 +40,7 @@ const adjustStock = async (products: any[], multiplier: number): Promise<void> =
     }
   }
 };
+
 
 
 export const getParticulars = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
