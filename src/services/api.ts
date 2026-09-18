@@ -106,6 +106,7 @@ export const ProductsApi = {
   create: (data: any) => request<any>('/products', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: any) => request<any>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => request<any>(`/products/${id}`, { method: 'DELETE' }),
+  bulkDelete: (ids: string[]) => request<any>('/products/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
 };
 
 // Categories API

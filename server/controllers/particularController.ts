@@ -2,8 +2,45 @@ import type { Request, Response, NextFunction } from 'express';
 import { Particular } from '../models/Particular';
 import { AccountLedger } from '../models/AccountLedger';
 import { Customer } from '../models/Customer';
+import PriceList from '../models/PriceList';
+import { Product } from '../models/Product';
 import { escapeRegex, recalculateCustomerBalance } from '../utils/ledgerUtils';
 import { isCloudinaryConfigured, uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
+
+// Helper to decrement (multiplier: -1) or increment/restore (multiplier: +1) stock in PriceList and Product collections
+const adjustStock = async (products: any[], multiplier: number): Promise<void> => {
+  if (!Array.isArray(products) || products.length === 0) return;
+
+  for (const item of products) {
+    const rawName = item.particular || item.name || item.itemName;
+    const cleanName = typeof rawName === 'string' ? rawName.trim() : '';
+    const rawQty = parseFloat(String(item.quantity || item.qty || '0').replace(/,/g, ''));
+    const qty = isNaN(rawQty) ? 0 : rawQty;
+
+    if (cleanName && qty !== 0) {
+      const change = qty * multiplier;
+      const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const nameRegex = new RegExp(`^${escapedName}$`, 'i');
+
+      try {
+        // Adjust stock in PriceList collection
+        await PriceList.updateMany(
+          { itemName: { $regex: nameRegex } },
+          { $inc: { stock: change } }
+        );
+
+        // Adjust stock in Product collection
+        await Product.updateMany(
+          { name: { $regex: nameRegex } },
+          { $inc: { stock: change } }
+        );
+      } catch (err) {
+        console.warn(`[Stock Adjustment Error] Could not update stock for "${cleanName}":`, err);
+      }
+    }
+  }
+};
+
 
 export const getParticulars = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -220,6 +257,11 @@ export const createParticular = async (req: Request, res: Response, next: NextFu
       await recalculateCustomerBalance(particular.customerName);
     }
 
+    // 3. Automatically Deduct Sold Quantities from Stock (PriceList & Product collections)
+    if (products && Array.isArray(products) && products.length > 0) {
+      await adjustStock(products, -1);
+    }
+
     res.status(201).json({ success: true, data: particular });
   } catch (error) {
     next(error);
@@ -399,6 +441,16 @@ export const updateParticular = async (req: Request, res: Response, next: NextFu
       });
     }
 
+    // 3. Adjust Stock if products in bill were updated
+    if (products !== undefined) {
+      if (existing.products && Array.isArray(existing.products)) {
+        await adjustStock(existing.products, 1); // Restore old quantities
+      }
+      if (Array.isArray(products)) {
+        await adjustStock(products, -1); // Deduct new quantities
+      }
+    }
+
     // Recalculate balances
     if (oldCustomerName && oldCustomerName !== updatedParticular.customerName) {
       await recalculateCustomerBalance(oldCustomerName);
@@ -426,10 +478,15 @@ export const deleteParticular = async (req: Request, res: Response, next: NextFu
       await deleteFromCloudinary(particular.pdfPublicId);
     }
 
-    // 2. Delete Particular Document
+    // 2. Restore Stock for items in the deleted bill
+    if (particular.products && Array.isArray(particular.products) && particular.products.length > 0) {
+      await adjustStock(particular.products, 1);
+    }
+
+    // 3. Delete Particular Document
     await Particular.findByIdAndDelete(req.params.id);
 
-    // 3. Cascade Delete: Delete matching AccountLedger entries (BILL and PAYMENT)
+    // 4. Cascade Delete: Delete matching AccountLedger entries (BILL and PAYMENT)
     await AccountLedger.deleteMany({
       $or: [
         { particularId: String(req.params.id) },
@@ -437,7 +494,7 @@ export const deleteParticular = async (req: Request, res: Response, next: NextFu
       ],
     });
 
-    // 4. Recalculate balance for this customer
+    // 5. Recalculate balance for this customer
     await recalculateCustomerBalance(customerName);
 
     res.status(200).json({ success: true, data: {} });

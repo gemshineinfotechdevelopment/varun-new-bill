@@ -89,6 +89,7 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
           ...(product.unit && { unit: product.unit }),
           ...(product.rate !== undefined && { rate: Number(product.rate) }),
           ...(product.mrp !== undefined && { mrp: Number(product.mrp) }),
+          ...(product.stock !== undefined && { stock: Number(product.stock) }),
         }
       );
     } catch (syncErr) {
@@ -127,3 +128,41 @@ export const deleteProduct = async (req: Request, res: Response, next: NextFunct
     next(error);
   }
 };
+
+export const bulkDeleteProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, error: 'No product IDs provided for deletion' });
+      return;
+    }
+
+    // 1. Find all products to get their names for cascading deletion in PriceList
+    const productsToDelete = await Product.find({ _id: { $in: ids } });
+    const productNames = productsToDelete
+      .map((p) => p.name ? p.name.trim() : '')
+      .filter(Boolean);
+
+    // 2. Delete products from Product collection
+    await Product.deleteMany({ _id: { $in: ids } });
+
+    // 3. Delete matching items from PriceList collection as well
+    if (productNames.length > 0) {
+      const regexPatterns = productNames.map(
+        (name) => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+      );
+      await PriceList.deleteMany({
+        itemName: { $in: regexPatterns },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully deleted ${productsToDelete.length} products and synced PriceList`,
+      count: productsToDelete.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

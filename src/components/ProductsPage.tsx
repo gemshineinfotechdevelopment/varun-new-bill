@@ -24,12 +24,15 @@ import {
   Select,
   FormControl,
   Grid,
+  Checkbox,
 } from '@mui/material';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ModeEditOutlineRoundedIcon from '@mui/icons-material/ModeEditOutlineRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import DeleteSweepRoundedIcon from '@mui/icons-material/DeleteSweepRounded';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import { ProductsApi, CategoriesApi, PriceListsApi } from '../services/api';
@@ -210,6 +213,55 @@ export const ProductsPage: FC = () => {
     }
   };
 
+  // Selection & Bulk Delete State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const isAllSelected = useMemo(() => {
+    if (filteredProducts.length === 0) return false;
+    return filteredProducts.every((p) => selectedIds.includes(p._id || p.id || ''));
+  }, [filteredProducts, selectedIds]);
+
+  const isSomeSelected = useMemo(() => {
+    if (filteredProducts.length === 0) return false;
+    const count = filteredProducts.filter((p) => selectedIds.includes(p._id || p.id || '')).length;
+    return count > 0 && count < filteredProducts.length;
+  }, [filteredProducts, selectedIds]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      const visibleIds = new Set(filteredProducts.map((p) => p._id || p.id || ''));
+      setSelectedIds((prev) => prev.filter((id) => !visibleIds.has(id)));
+    } else {
+      const visibleIds = filteredProducts.map((p) => p._id || p.id || '').filter(Boolean);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    if (!id) return;
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      setBulkDeleting(true);
+      await ProductsApi.bulkDelete(selectedIds);
+      setProducts((prev) => prev.filter((p) => !selectedIds.includes(p._id || p.id || '')));
+      setSelectedIds([]);
+      setBulkDeleteDialogOpen(false);
+    } catch (err) {
+      console.error('Failed to bulk delete products:', err);
+      alert('Error deleting selected products');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const handleDeleteProduct = async (product: ProductItem) => {
     const id = product._id || product.id || '';
     if (!id) return;
@@ -218,6 +270,7 @@ export const ProductsPage: FC = () => {
     try {
       await ProductsApi.delete(id);
       setProducts((prev) => prev.filter((p) => (p._id || p.id) !== id));
+      setSelectedIds((prev) => prev.filter((i) => i !== id));
     } catch (err) {
       console.error('Failed to delete product:', err);
       alert('Error deleting product');
@@ -470,22 +523,110 @@ export const ProductsPage: FC = () => {
           })}
         </Box>
 
+        {/* Bulk Selection Action Bar */}
+        {selectedIds.length > 0 && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#FEF2F2',
+              borderBottom: '2px solid #FECACA',
+              px: { xs: 2, sm: 3 },
+              py: 1.2,
+              animation: 'fadeIn 0.2s ease-in-out',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+              <Typography sx={{ fontSize: '13.5px', fontWeight: 800, color: '#991B1B' }}>
+                {selectedIds.length} {selectedIds.length === 1 ? 'product' : 'products'} selected
+              </Typography>
+              <Button
+                size="small"
+                onClick={() => setSelectedIds([])}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#7F1D1D',
+                  p: 0,
+                  minWidth: 'auto',
+                  textDecoration: 'underline',
+                  '&:hover': { backgroundColor: 'transparent', color: '#991B1B' },
+                }}
+              >
+                Deselect All
+              </Button>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => setBulkDeleteDialogOpen(true)}
+                startIcon={<DeleteSweepRoundedIcon sx={{ fontSize: 18 }} />}
+                sx={{
+                  backgroundColor: '#DC2626',
+                  color: '#FFFFFF',
+                  fontSize: '12.5px',
+                  fontWeight: 800,
+                  textTransform: 'none',
+                  px: 2,
+                  py: 0.6,
+                  borderRadius: '7px',
+                  boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
+                  '&:hover': {
+                    backgroundColor: '#B91C1C',
+                  },
+                }}
+              >
+                Delete Selected ({selectedIds.length})
+              </Button>
+            </Box>
+          </Box>
+        )}
+
         {/* Table Container */}
         <TableContainer sx={{ height: { xs: 'auto', md: 'calc(100vh - 185px)' }, maxHeight: { xs: '550px', md: 'calc(100vh - 185px)' }, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <Table stickyHeader sx={{ minWidth: { xs: '650px', sm: '100%' } }} aria-label="product table">
+          <Table stickyHeader sx={{ minWidth: { xs: '700px', sm: '100%' } }} aria-label="product table">
             <TableHead>
               <TableRow sx={{ backgroundColor: '#FFFBEB' }}>
+                {/* Select All Checkbox Column */}
+                <TableCell
+                  align="center"
+                  sx={{
+                    py: 1.5,
+                    px: 1.5,
+                    backgroundColor: '#FFFBEB',
+                    borderBottom: '2px solid #FDE68A',
+                    width: '48px',
+                  }}
+                >
+                  <Checkbox
+                    size="small"
+                    checked={isAllSelected}
+                    indeterminate={isSomeSelected}
+                    onChange={handleToggleSelectAll}
+                    disabled={filteredProducts.length === 0}
+                    sx={{
+                      p: 0,
+                      color: '#D97706',
+                      '&.Mui-checked': { color: '#DC2626' },
+                      '&.MuiCheckbox-indeterminate': { color: '#DC2626' },
+                    }}
+                  />
+                </TableCell>
                 <TableCell
                   sx={{
                     py: 1.5,
-                    px: { xs: 2, sm: 3 },
+                    px: { xs: 1.5, sm: 2.5 },
                     fontSize: '12px',
                     fontWeight: 800,
                     color: '#7C2D12',
                     letterSpacing: '0.04em',
                     backgroundColor: '#FFFBEB',
                     borderBottom: '2px solid #FDE68A',
-                    width: '80px',
+                    width: '70px',
                   }}
                 >
                   SL.NO
@@ -578,7 +719,7 @@ export const ProductsPage: FC = () => {
                     letterSpacing: '0.04em',
                     backgroundColor: '#FFFBEB',
                     borderBottom: '2px solid #FDE68A',
-                    width: '80px',
+                    width: '70px',
                   }}
                 >
                   EDIT
@@ -587,14 +728,14 @@ export const ProductsPage: FC = () => {
                   align="center"
                   sx={{
                     py: 1.5,
-                    px: { xs: 2, sm: 3 },
+                    px: { xs: 1.5, sm: 2.5 },
                     fontSize: '12px',
                     fontWeight: 800,
                     color: '#7C2D12',
                     letterSpacing: '0.04em',
                     backgroundColor: '#FFFBEB',
                     borderBottom: '2px solid #FDE68A',
-                    width: '80px',
+                    width: '70px',
                   }}
                 >
                   DELETE
@@ -604,13 +745,13 @@ export const ProductsPage: FC = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                     <CircularProgress size={32} sx={{ color: '#DC2626' }} />
                   </TableCell>
                 </TableRow>
               ) : filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 6, color: '#786C58' }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 6, color: '#786C58' }}>
                     {searchTerm ? (
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                         <Typography sx={{ fontSize: '14px', color: '#786C58', fontWeight: 500 }}>
@@ -631,20 +772,44 @@ export const ProductsPage: FC = () => {
                 </TableRow>
               ) : (
                 filteredProducts.map((product, index) => {
+                  const prodId = product._id || product.id || String(index);
+                  const isSelected = selectedIds.includes(prodId);
                   const isLast = index === filteredProducts.length - 1;
                   return (
                     <TableRow
-                      key={product._id || product.id || index}
+                      key={prodId}
+                      selected={isSelected}
                       sx={{
+                        backgroundColor: isSelected ? '#FEF2F2 !important' : 'inherit',
                         '&:hover': {
-                          backgroundColor: '#FEFDF5',
+                          backgroundColor: isSelected ? '#FEE2E2 !important' : '#FEFDF5',
                         },
                       }}
                     >
+                      {/* Checkbox Cell */}
+                      <TableCell
+                        align="center"
+                        sx={{
+                          py: 1.4,
+                          px: 1.5,
+                          borderBottom: isLast ? 'none' : '1px solid #F7EEDB',
+                        }}
+                      >
+                        <Checkbox
+                          size="small"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(prodId)}
+                          sx={{
+                            p: 0,
+                            color: '#D1D5DB',
+                            '&.Mui-checked': { color: '#DC2626' },
+                          }}
+                        />
+                      </TableCell>
                       <TableCell
                         sx={{
                           py: 1.4,
-                          px: { xs: 2, sm: 3 },
+                          px: { xs: 1.5, sm: 2.5 },
                           fontSize: '13.5px',
                           fontWeight: 700,
                           color: '#786C58',
@@ -764,7 +929,7 @@ export const ProductsPage: FC = () => {
                         align="center"
                         sx={{
                           py: 1.4,
-                          px: { xs: 2, sm: 3 },
+                          px: { xs: 1.5, sm: 2.5 },
                           borderBottom: isLast ? 'none' : '1px solid #F7EEDB',
                         }}
                       >
@@ -798,6 +963,64 @@ export const ProductsPage: FC = () => {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog
+        open={bulkDeleteDialogOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '14px',
+              p: 1,
+              border: '1.5px solid #FECACA',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.2, color: '#DC2626', fontWeight: 800, fontSize: '17px' }}>
+          <WarningAmberRoundedIcon sx={{ color: '#DC2626', fontSize: 24 }} />
+          Bulk Delete Confirmation
+        </DialogTitle>
+        <DialogContent sx={{ pt: '10px !important' }}>
+          <Typography sx={{ fontSize: '13.5px', color: '#1F2937', fontWeight: 600, mb: 1.5 }}>
+            Are you sure you want to permanently delete <strong>{selectedIds.length}</strong> selected products?
+          </Typography>
+          <Typography sx={{ fontSize: '12px', color: '#6B7280', lineHeight: 1.5, backgroundColor: '#FEF2F2', p: 1.5, borderRadius: '8px', border: '1px solid #FECACA' }}>
+            ⚠️ This will remove these products from both the Products catalog and the synced Price List. This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 1 }}>
+          <Button
+            onClick={() => setBulkDeleteDialogOpen(false)}
+            disabled={bulkDeleting}
+            sx={{ color: '#6B7280', fontWeight: 700, textTransform: 'none' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmBulkDelete}
+            disabled={bulkDeleting}
+            startIcon={bulkDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteSweepRoundedIcon />}
+            sx={{
+              backgroundColor: '#DC2626',
+              fontWeight: 800,
+              textTransform: 'none',
+              px: 2.5,
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
+              '&:hover': { backgroundColor: '#B91C1C' },
+            }}
+          >
+            {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.length} Products`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
 
       {/* Add / Edit Product Modal */}
       <Dialog
