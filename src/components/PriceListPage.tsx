@@ -53,7 +53,7 @@ import * as XLSX from 'xlsx';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import Tesseract from 'tesseract.js';
-import { PriceListsApi, CategoriesApi } from '../services/api';
+import { PriceListsApi, CategoriesApi, ProductsApi } from '../services/api';
 import { getStoredSettings } from './SettingsPage';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -176,11 +176,49 @@ export const PriceListPage: FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [priceData, catData] = await Promise.all([
+      const [priceData, catData, prodsData] = await Promise.all([
         PriceListsApi.getAll(),
         CategoriesApi.getAll().catch(() => []),
+        ProductsApi.getAll().catch(() => []),
       ]);
-      setItems(Array.isArray(priceData) ? priceData : []);
+
+      const prodMap = new Map<string, any>();
+      if (Array.isArray(prodsData)) {
+        prodsData.forEach((p: any) => {
+          if (p.name) {
+            prodMap.set(p.name.toLowerCase().trim(), p);
+          }
+        });
+      }
+
+      let mergedItems: PriceItem[] = [];
+      if (Array.isArray(priceData)) {
+        mergedItems = priceData.map((item: any) => {
+          const key = (item.itemName || '').toLowerCase().trim();
+          const p = prodMap.get(key);
+
+          const plShop = Number(item.shopStock ?? item.shop_stock ?? item.shop ?? 0) || 0;
+          const plGodown = Number(item.godownStock ?? item.godown_stock ?? item.godown ?? 0) || 0;
+          const plTotal = Number(item.stock ?? item.quantity ?? item.qty ?? 0) || (plShop + plGodown);
+
+          const pShop = Number(p?.shopStock ?? p?.shop_stock ?? p?.shop ?? 0) || 0;
+          const pGodown = Number(p?.godownStock ?? p?.godown_stock ?? p?.godown ?? 0) || 0;
+          const pTotal = Number(p?.stock ?? p?.quantity ?? p?.qty ?? 0) || (pShop + pGodown);
+
+          const shopStock = plShop > 0 ? plShop : pShop;
+          const godownStock = plGodown > 0 ? plGodown : pGodown;
+          const totalStock = (plTotal > 0 ? plTotal : pTotal) || (shopStock + godownStock);
+
+          return {
+            ...item,
+            shopStock,
+            godownStock,
+            stock: totalStock,
+          };
+        });
+      }
+
+      setItems(mergedItems);
       if (Array.isArray(catData) && catData.length > 0) {
         setCategories(catData.map((c) => ({ name: c.name, color: c.color })));
       }

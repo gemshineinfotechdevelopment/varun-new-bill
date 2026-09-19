@@ -4,7 +4,39 @@ import PriceList from '../models/PriceList';
 
 export const getProducts = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const products = await Product.find().sort({ slNo: 1, createdAt: 1 });
+    const rawProducts = await Product.find().lean().sort({ slNo: 1, createdAt: 1 });
+    const priceItems = await PriceList.find().lean();
+    const priceMap = new Map<string, any>();
+    priceItems.forEach((item: any) => {
+      if (item.itemName) {
+        priceMap.set(item.itemName.toLowerCase().trim(), item);
+      }
+    });
+
+    const products = rawProducts.map((p: any) => {
+      const key = (p.name || '').toLowerCase().trim();
+      const pItem = priceMap.get(key);
+
+      const pShop = Number(p.shopStock ?? p.shop_stock ?? p['Shop Stock'] ?? p.shop ?? p['Shop'] ?? p.counterStock ?? 0);
+      const pGodown = Number(p.godownStock ?? p.godown_stock ?? p['Godown Stock'] ?? p.godown ?? p['Godown'] ?? p.warehouse ?? 0);
+      const pStock = Number(p.stock ?? p.quantity ?? p.qty ?? p['Qty'] ?? p['Total Stock'] ?? 0);
+
+      const plShop = Number(pItem?.shopStock ?? pItem?.shop_stock ?? pItem?.['Shop Stock'] ?? pItem?.shop ?? 0);
+      const plGodown = Number(pItem?.godownStock ?? pItem?.godown_stock ?? pItem?.['Godown Stock'] ?? pItem?.godown ?? 0);
+      const plStock = Number(pItem?.stock ?? pItem?.quantity ?? pItem?.qty ?? 0);
+
+      const shopStock = pShop > 0 ? pShop : plShop;
+      const godownStock = pGodown > 0 ? pGodown : plGodown;
+      const stock = (pStock > 0 ? pStock : plStock) || (shopStock + godownStock);
+
+      return {
+        ...p,
+        shopStock,
+        godownStock,
+        stock,
+      };
+    });
+
     res.status(200).json({ success: true, count: products.length, data: products });
   } catch (error) {
     next(error);
@@ -13,12 +45,38 @@ export const getProducts = async (_req: Request, res: Response, next: NextFuncti
 
 export const getProductById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const product = await Product.findById(req.params.id);
-    if (!product) {
+    const p: any = await Product.findById(req.params.id).lean();
+    if (!p) {
       res.status(404).json({ success: false, error: 'Product not found' });
       return;
     }
-    res.status(200).json({ success: true, data: product });
+
+    const cleanName = (p.name || '').trim();
+    const priceItem: any = cleanName ? await PriceList.findOne({
+      itemName: { $regex: new RegExp(`^${cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    }).lean() : null;
+
+    const pShop = Number(p.shopStock ?? p.shop_stock ?? p['Shop Stock'] ?? p.shop ?? p['Shop'] ?? p.counterStock ?? 0);
+    const pGodown = Number(p.godownStock ?? p.godown_stock ?? p['Godown Stock'] ?? p.godown ?? p['Godown'] ?? p.warehouse ?? 0);
+    const pStock = Number(p.stock ?? p.quantity ?? p.qty ?? p['Qty'] ?? p['Total Stock'] ?? 0);
+
+    const plShop = Number(priceItem?.shopStock ?? priceItem?.shop_stock ?? priceItem?.shop ?? 0);
+    const plGodown = Number(priceItem?.godownStock ?? priceItem?.godown_stock ?? priceItem?.godown ?? 0);
+    const plStock = Number(priceItem?.stock ?? priceItem?.quantity ?? priceItem?.qty ?? 0);
+
+    const shopStock = pShop > 0 ? pShop : plShop;
+    const godownStock = pGodown > 0 ? pGodown : plGodown;
+    const stock = (pStock > 0 ? pStock : plStock) || (shopStock + godownStock);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...p,
+        shopStock,
+        godownStock,
+        stock,
+      }
+    });
   } catch (error) {
     next(error);
   }

@@ -98,9 +98,18 @@ export const ProductsPage: FC = () => {
           const key = (p.name || '').toLowerCase().trim();
           seenNames.add(key);
           const priceItem = priceMap.get(key);
-          const shopStock = priceItem?.shopStock !== undefined ? priceItem.shopStock : (p.shopStock || 0);
-          const godownStock = priceItem?.godownStock !== undefined ? priceItem.godownStock : (p.godownStock || 0);
-          const totalStock = priceItem?.stock !== undefined ? priceItem.stock : (p.stock !== undefined ? p.stock : (shopStock + godownStock));
+
+          const pShop = Number(p.shopStock ?? p.shop_stock ?? p.shop ?? p.counterStock ?? 0) || 0;
+          const pGodown = Number(p.godownStock ?? p.godown_stock ?? p.godown ?? p.warehouse ?? 0) || 0;
+          const pTotal = Number(p.stock ?? p.quantity ?? p.qty ?? 0) || (pShop + pGodown);
+
+          const plShop = Number(priceItem?.shopStock ?? priceItem?.shop_stock ?? priceItem?.shop ?? 0) || 0;
+          const plGodown = Number(priceItem?.godownStock ?? priceItem?.godown_stock ?? priceItem?.godown ?? 0) || 0;
+          const plTotal = Number(priceItem?.stock ?? priceItem?.quantity ?? priceItem?.qty ?? 0) || (plShop + plGodown);
+
+          const shopStock = pShop > 0 ? pShop : plShop;
+          const godownStock = pGodown > 0 ? pGodown : plGodown;
+          const totalStock = (pTotal > 0 ? pTotal : plTotal) || (shopStock + godownStock);
 
           mergedProducts.push({
             _id: p._id || p.id,
@@ -108,8 +117,8 @@ export const ProductsPage: FC = () => {
             slNo: p.slNo || idx + 1,
             name: p.name,
             category: priceItem?.category || p.category || 'General',
-            rate: priceItem?.rate !== undefined ? priceItem.rate : (p.rate || 0),
-            mrp: priceItem?.mrp !== undefined ? priceItem.mrp : (p.mrp || 0),
+            rate: priceItem?.rate !== undefined && priceItem.rate > 0 ? priceItem.rate : (p.rate || 0),
+            mrp: priceItem?.mrp !== undefined && priceItem.mrp > 0 ? priceItem.mrp : (p.mrp || 0),
             unit: priceItem?.unit || p.unit || 'Box',
             shopStock,
             godownStock,
@@ -126,9 +135,9 @@ export const ProductsPage: FC = () => {
           if (key && !seenNames.has(key)) {
             maxSlNo += 1;
             seenNames.add(key);
-            const shopStock = pItem.shopStock || 0;
-            const godownStock = pItem.godownStock || 0;
-            const totalStock = pItem.stock !== undefined ? pItem.stock : (shopStock + godownStock);
+            const shopStock = Number(pItem.shopStock ?? pItem.shop_stock ?? pItem.shop ?? 0) || 0;
+            const godownStock = Number(pItem.godownStock ?? pItem.godown_stock ?? pItem.godown ?? 0) || 0;
+            const totalStock = Number(pItem.stock ?? pItem.quantity ?? pItem.qty ?? 0) || (shopStock + godownStock);
 
             mergedProducts.push({
               _id: pItem._id || pItem.id,

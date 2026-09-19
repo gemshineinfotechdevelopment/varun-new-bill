@@ -23,17 +23,73 @@ const adjustStock = async (products: any[], multiplier: number): Promise<void> =
       const nameRegex = new RegExp(`^${escapedName}$`, 'i');
 
       try {
-        // Adjust shopStock and total stock in PriceList collection
-        await PriceList.updateMany(
-          { itemName: { $regex: nameRegex } },
-          { $inc: { shopStock: change, stock: change } }
-        );
+        // Adjust in PriceList collection
+        const priceItems = await PriceList.find({ itemName: { $regex: nameRegex } });
+        for (const pItem of priceItems) {
+          const currentShop = Number(pItem.shopStock ?? (pItem as any).shop_stock ?? 0);
+          const currentGodown = Number(pItem.godownStock ?? (pItem as any).godown_stock ?? 0);
+          let newShop = currentShop;
+          let newGodown = currentGodown;
 
-        // Adjust shopStock and total stock in Product collection
-        await Product.updateMany(
-          { name: { $regex: nameRegex } },
-          { $inc: { shopStock: change, stock: change } }
-        );
+          if (multiplier < 0) {
+            // Deducting stock on sale
+            if (currentShop >= qty) {
+              newShop = currentShop - qty;
+            } else if (currentShop > 0) {
+              const remaining = qty - currentShop;
+              newShop = 0;
+              newGodown = Math.max(0, currentGodown - remaining);
+            } else if (currentGodown > 0) {
+              newGodown = Math.max(0, currentGodown - qty);
+            } else {
+              newShop = currentShop - qty;
+            }
+          } else {
+            // Restoring stock on delete/edit
+            newShop = currentShop + qty;
+          }
+
+          const newTotal = newShop + newGodown;
+          await PriceList.findByIdAndUpdate(pItem._id, {
+            shopStock: newShop,
+            godownStock: newGodown,
+            stock: newTotal,
+          });
+        }
+
+        // Adjust in Product collection
+        const productItems = await Product.find({ name: { $regex: nameRegex } });
+        for (const pItem of productItems) {
+          const currentShop = Number(pItem.shopStock ?? (pItem as any).shop_stock ?? 0);
+          const currentGodown = Number(pItem.godownStock ?? (pItem as any).godown_stock ?? 0);
+          let newShop = currentShop;
+          let newGodown = currentGodown;
+
+          if (multiplier < 0) {
+            // Deducting stock on sale
+            if (currentShop >= qty) {
+              newShop = currentShop - qty;
+            } else if (currentShop > 0) {
+              const remaining = qty - currentShop;
+              newShop = 0;
+              newGodown = Math.max(0, currentGodown - remaining);
+            } else if (currentGodown > 0) {
+              newGodown = Math.max(0, currentGodown - qty);
+            } else {
+              newShop = currentShop - qty;
+            }
+          } else {
+            // Restoring stock on delete/edit
+            newShop = currentShop + qty;
+          }
+
+          const newTotal = newShop + newGodown;
+          await Product.findByIdAndUpdate(pItem._id, {
+            shopStock: newShop,
+            godownStock: newGodown,
+            stock: newTotal,
+          });
+        }
       } catch (err) {
         console.warn(`[Stock Adjustment Error] Could not update stock for "${cleanName}":`, err);
       }

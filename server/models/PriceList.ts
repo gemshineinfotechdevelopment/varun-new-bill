@@ -75,6 +75,7 @@ const PriceListItemSchema: Schema = new Schema(
   },
   {
     timestamps: true,
+    strict: false,
   }
 );
 

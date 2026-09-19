@@ -141,7 +141,38 @@ export const getPriceList = async (req: Request, res: Response): Promise<void> =
       ];
     }
 
-    const items = await PriceList.find(filter).sort({ slNo: 1, createdAt: -1 });
+    const rawItems = await PriceList.find(filter).lean().sort({ slNo: 1, createdAt: -1 });
+    const products = await Product.find().lean();
+    const prodMap = new Map<string, any>();
+    products.forEach((p: any) => {
+      if (p.name) {
+        prodMap.set(p.name.toLowerCase().trim(), p);
+      }
+    });
+
+    const items = rawItems.map((item: any) => {
+      const key = (item.itemName || '').toLowerCase().trim();
+      const p = prodMap.get(key);
+
+      const plShop = Number(item.shopStock ?? item.shop_stock ?? item['Shop Stock'] ?? item.shop ?? item['Shop'] ?? item.counterStock ?? 0);
+      const plGodown = Number(item.godownStock ?? item.godown_stock ?? item['Godown Stock'] ?? item.godown ?? item['Godown'] ?? item.warehouse ?? 0);
+      const plStock = Number(item.stock ?? item.quantity ?? item.qty ?? item['Qty'] ?? item['Total Stock'] ?? 0);
+
+      const pShop = Number(p?.shopStock ?? p?.shop_stock ?? p?.['Shop Stock'] ?? p?.shop ?? 0);
+      const pGodown = Number(p?.godownStock ?? p?.godown_stock ?? p?.['Godown Stock'] ?? p?.godown ?? 0);
+      const pStock = Number(p?.stock ?? p?.quantity ?? p?.qty ?? 0);
+
+      const shopStock = plShop > 0 ? plShop : pShop;
+      const godownStock = plGodown > 0 ? plGodown : pGodown;
+      const stock = (plStock > 0 ? plStock : pStock) || (shopStock + godownStock);
+
+      return {
+        ...item,
+        shopStock,
+        godownStock,
+        stock,
+      };
+    });
 
     res.status(200).json({
       success: true,

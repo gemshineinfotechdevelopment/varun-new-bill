@@ -26,7 +26,7 @@ const ProductSchema: Schema = new Schema(
     godownStock: { type: Number, default: 0 },
     stock: { type: Number, default: 0 },
   },
-  { timestamps: true }
+  { timestamps: true, strict: false }
 );
 
 export const Product = mongoose.model<IProduct>('Product', ProductSchema);
