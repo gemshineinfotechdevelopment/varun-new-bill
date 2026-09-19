@@ -84,7 +84,16 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
 
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const product = await Product.create(req.body);
+    const shopStockVal = Number(req.body.shopStock ?? req.body.shop_stock ?? req.body['Shop Stock'] ?? req.body.shop ?? 0);
+    const godownStockVal = Number(req.body.godownStock ?? req.body.godown_stock ?? req.body['Godown Stock'] ?? req.body.godown ?? 0);
+    const stockVal = (shopStockVal + godownStockVal) > 0 ? (shopStockVal + godownStockVal) : Number(req.body.stock ?? req.body.quantity ?? req.body.qty ?? 0);
+
+    const product = await Product.create({
+      ...req.body,
+      shopStock: shopStockVal,
+      godownStock: godownStockVal,
+      stock: stockVal,
+    });
 
     // Sync to PriceList
     try {
@@ -95,9 +104,6 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
 
       if (!existingPrice && cleanName) {
         const totalCount = await PriceList.countDocuments();
-        const shopStockVal = Number(product.shopStock || 0);
-        const godownStockVal = Number(product.godownStock || 0);
-        const stockVal = Number(product.stock || (shopStockVal + godownStockVal) || 0);
 
         await PriceList.create({
           slNo: totalCount + 1,
@@ -132,7 +138,22 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
     }
 
     const oldName = oldProduct.name;
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+    const shopStockVal = req.body.shopStock !== undefined ? Number(req.body.shopStock) : (req.body.shop_stock !== undefined ? Number(req.body.shop_stock) : undefined);
+    const godownStockVal = req.body.godownStock !== undefined ? Number(req.body.godownStock) : (req.body.godown_stock !== undefined ? Number(req.body.godown_stock) : undefined);
+
+    const updatePayload: any = {
+      ...req.body,
+      ...(shopStockVal !== undefined && { shopStock: shopStockVal }),
+      ...(godownStockVal !== undefined && { godownStock: godownStockVal }),
+    };
+
+    if (shopStockVal !== undefined || godownStockVal !== undefined) {
+      const curShop = shopStockVal !== undefined ? shopStockVal : Number(oldProduct.shopStock || 0);
+      const curGodown = godownStockVal !== undefined ? godownStockVal : Number(oldProduct.godownStock || 0);
+      updatePayload.stock = curShop + curGodown;
+    }
+
+    const product = await Product.findByIdAndUpdate(req.params.id, updatePayload, {
       new: true,
       runValidators: true,
     });

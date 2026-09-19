@@ -77,16 +77,9 @@ const syncCategoriesAndProducts = async (items: any[]) => {
       const mrpVal = Number(item.mrp || 0);
       const unitVal = cleanToEnglish(String(item.unit || 'Box')) || 'Box';
       const catVal = cleanToEnglish(String(item.category || 'General')) || 'General';
-      let shopStockVal = Number(item.shopStock ?? item.shop_stock ?? item['Shop Stock'] ?? item['Shop'] ?? item['Shop Qty'] ?? 0);
+      const shopStockVal = Number(item.shopStock ?? item.shop_stock ?? item['Shop Stock'] ?? item['Shop'] ?? item['Shop Qty'] ?? 0);
       const godownStockVal = Number(item.godownStock ?? item.godown_stock ?? item['Godown Stock'] ?? item['Godown'] ?? item['Godown Qty'] ?? 0);
-      let stockVal = Number(item.stock ?? item.Stock ?? item['Qty'] ?? item['Total Stock'] ?? (shopStockVal + godownStockVal));
-
-      if (stockVal === 0 && (shopStockVal > 0 || godownStockVal > 0)) {
-        stockVal = shopStockVal + godownStockVal;
-      }
-      if (shopStockVal === 0 && godownStockVal === 0 && stockVal > 0) {
-        shopStockVal = stockVal;
-      }
+      const stockVal = (shopStockVal + godownStockVal) > 0 ? (shopStockVal + godownStockVal) : Number(item.stock ?? item.Stock ?? item['Qty'] ?? item['Total Stock'] ?? 0);
 
       if (existingProdMap.has(nameKey)) {
         // Update product rate/category/stock
@@ -197,12 +190,9 @@ export const createPriceListItem = async (req: Request, res: Response): Promise<
     }
 
     const nextSlNo = slNo || (await PriceList.countDocuments()) + 1;
-    const shopStockVal = Number(shopStock || 0);
-    const godownStockVal = Number(godownStock || 0);
-    let totalStockVal = Number(stock || (shopStockVal + godownStockVal) || 0);
-    if (totalStockVal === 0 && (shopStockVal > 0 || godownStockVal > 0)) {
-      totalStockVal = shopStockVal + godownStockVal;
-    }
+    const shopStockVal = Number(shopStock ?? req.body.shop_stock ?? req.body['Shop Stock'] ?? 0);
+    const godownStockVal = Number(godownStock ?? req.body.godown_stock ?? req.body['Godown Stock'] ?? 0);
+    const totalStockVal = (shopStockVal + godownStockVal) > 0 ? (shopStockVal + godownStockVal) : Number(stock || 0);
 
     const item = await PriceList.create({
       slNo: nextSlNo,
@@ -252,16 +242,7 @@ export const bulkImportPriceList = async (req: Request, res: Response): Promise<
       const godownStock = Number(
         item.godownStock ?? item.godown_stock ?? item['Godown Stock'] ?? item['Godown'] ?? item['GODOWN'] ?? item['Godown Qty'] ?? item['Warehouse'] ?? item['Go-down'] ?? 0
       );
-      let totalStock = Number(
-        item.stock ?? item.Stock ?? item['Qty'] ?? item['Total Stock'] ?? item['TOTAL STOCK'] ?? (shopStock + godownStock)
-      );
-      if (totalStock === 0 && (shopStock > 0 || godownStock > 0)) {
-        totalStock = shopStock + godownStock;
-      }
-      if (shopStock === 0 && godownStock === 0 && totalStock > 0) {
-        // default to shop stock if only generic total stock was provided
-        // (so billing from shop stock works seamlessly)
-      }
+      const totalStock = (shopStock + godownStock) > 0 ? (shopStock + godownStock) : Number(item.stock ?? item.Stock ?? item['Qty'] ?? item['Total Stock'] ?? 0);
 
       return {
         slNo: item.slNo || currentCount + idx + 1,
@@ -302,7 +283,28 @@ export const bulkImportPriceList = async (req: Request, res: Response): Promise<
 
 export const updatePriceListItem = async (req: Request, res: Response): Promise<void> => {
   try {
-    const item = await PriceList.findByIdAndUpdate(req.params.id, req.body, {
+    const oldItem = await PriceList.findById(req.params.id);
+    if (!oldItem) {
+      res.status(404).json({ success: false, error: 'Price item not found' });
+      return;
+    }
+
+    const shopStockVal = req.body.shopStock !== undefined ? Number(req.body.shopStock) : (req.body.shop_stock !== undefined ? Number(req.body.shop_stock) : undefined);
+    const godownStockVal = req.body.godownStock !== undefined ? Number(req.body.godownStock) : (req.body.godown_stock !== undefined ? Number(req.body.godown_stock) : undefined);
+
+    const updatePayload: any = {
+      ...req.body,
+      ...(shopStockVal !== undefined && { shopStock: shopStockVal }),
+      ...(godownStockVal !== undefined && { godownStock: godownStockVal }),
+    };
+
+    if (shopStockVal !== undefined || godownStockVal !== undefined) {
+      const curShop = shopStockVal !== undefined ? shopStockVal : Number(oldItem.shopStock || 0);
+      const curGodown = godownStockVal !== undefined ? godownStockVal : Number(oldItem.godownStock || 0);
+      updatePayload.stock = curShop + curGodown;
+    }
+
+    const item = await PriceList.findByIdAndUpdate(req.params.id, updatePayload, {
       new: true,
       runValidators: true,
     });
