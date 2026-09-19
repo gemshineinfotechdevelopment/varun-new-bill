@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IProduct extends Document {
   slNo: number;
+  sku?: string;
   name: string;
   category?: string;
   rate?: number;
@@ -17,6 +18,7 @@ export interface IProduct extends Document {
 const ProductSchema: Schema = new Schema(
   {
     slNo: { type: Number, required: true },
+    sku: { type: String, trim: true, sparse: true },
     name: { type: String, required: true, trim: true },
     category: { type: String, trim: true, default: 'General' },
     rate: { type: Number, default: 0 },

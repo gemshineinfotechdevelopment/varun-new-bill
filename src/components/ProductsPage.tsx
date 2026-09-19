@@ -101,15 +101,17 @@ export const ProductsPage: FC = () => {
 
           const pShop = Number(p.shopStock ?? p.shop_stock ?? p.shop ?? p.counterStock ?? 0) || 0;
           const pGodown = Number(p.godownStock ?? p.godown_stock ?? p.godown ?? p.warehouse ?? 0) || 0;
-          const pTotal = Number(p.stock ?? p.quantity ?? p.qty ?? 0) || (pShop + pGodown);
+          const pTotal = Number(p.stock ?? p.quantity ?? p.qty ?? 0) || 0;
 
           const plShop = Number(priceItem?.shopStock ?? priceItem?.shop_stock ?? priceItem?.shop ?? 0) || 0;
           const plGodown = Number(priceItem?.godownStock ?? priceItem?.godown_stock ?? priceItem?.godown ?? 0) || 0;
-          const plTotal = Number(priceItem?.stock ?? priceItem?.quantity ?? priceItem?.qty ?? 0) || (plShop + plGodown);
+          const plTotal = Number(priceItem?.stock ?? priceItem?.quantity ?? priceItem?.qty ?? 0) || 0;
 
           const shopStock = pShop > 0 ? pShop : plShop;
           const godownStock = pGodown > 0 ? pGodown : plGodown;
-          const totalStock = (pTotal > 0 ? pTotal : plTotal) || (shopStock + godownStock);
+          const totalStock = (shopStock + godownStock > 0)
+            ? (shopStock + godownStock)
+            : (pTotal > 0 ? pTotal : (plTotal > 0 ? plTotal : 0));
 
           mergedProducts.push({
             _id: p._id || p.id,

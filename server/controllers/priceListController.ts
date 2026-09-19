@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import PriceList from '../models/PriceList';
 import Category from '../models/Category';
 import { Product } from '../models/Product';
+import { Inventory } from '../models/Inventory';
 
 const PRESET_COLORS = [
   '#DC2626', '#EA580C', '#D97706', '#059669', '#2563EB', '#7C3AED', '#DB2777', '#4B5563'
@@ -20,6 +21,11 @@ const cleanToEnglish = (text: string): string => {
     .replace(/[\/\\|:_\-~*]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+};
+
+const normalizeName = (str: string): string => {
+  if (!str) return '';
+  return str.toLowerCase().replace(/[\s\-_/\\|.,()[\]{}'"]+/g, ' ').trim();
 };
 
 // Helper to auto-sync categories and products into DB
@@ -134,18 +140,40 @@ export const getPriceList = async (req: Request, res: Response): Promise<void> =
       ];
     }
 
-    const rawItems = await PriceList.find(filter).lean().sort({ slNo: 1, createdAt: -1 });
-    const products = await Product.find().lean();
+    const [rawItems, products, inventoryItems] = await Promise.all([
+      PriceList.find(filter).lean().sort({ slNo: 1, createdAt: -1 }),
+      Product.find().lean(),
+      Inventory.find().lean(),
+    ]);
+
     const prodMap = new Map<string, any>();
     products.forEach((p: any) => {
       if (p.name) {
         prodMap.set(p.name.toLowerCase().trim(), p);
+        prodMap.set(normalizeName(p.name), p);
+      }
+    });
+
+    const invMap = new Map<string, any>();
+    inventoryItems.forEach((inv: any) => {
+      if (inv.productName) {
+        invMap.set(inv.productName.toLowerCase().trim(), inv);
+        invMap.set(normalizeName(inv.productName), inv);
+      }
+      if (inv.sku) {
+        invMap.set(String(inv.sku).toLowerCase().trim(), inv);
       }
     });
 
     const items = rawItems.map((item: any) => {
-      const key = (item.itemName || '').toLowerCase().trim();
-      const p = prodMap.get(key);
+      const exactKey = (item.itemName || '').toLowerCase().trim();
+      const normKey = normalizeName(item.itemName || '');
+      const p = prodMap.get(exactKey) || prodMap.get(normKey);
+      const inv = invMap.get(exactKey) || invMap.get(normKey);
+
+      const invShop = inv ? Number(inv.shopStock ?? inv.shop_stock ?? inv.shop ?? 0) : undefined;
+      const invGodown = inv ? Number(inv.godownStock ?? inv.godown_stock ?? inv.godown ?? 0) : undefined;
+      const invStock = inv ? Number(inv.totalStock ?? inv.stock ?? 0) : undefined;
 
       const plShop = Number(item.shopStock ?? item.shop_stock ?? item['Shop Stock'] ?? item.shop ?? item['Shop'] ?? item.counterStock ?? 0);
       const plGodown = Number(item.godownStock ?? item.godown_stock ?? item['Godown Stock'] ?? item.godown ?? item['Godown'] ?? item.warehouse ?? 0);
@@ -155,12 +183,20 @@ export const getPriceList = async (req: Request, res: Response): Promise<void> =
       const pGodown = Number(p?.godownStock ?? p?.godown_stock ?? p?.['Godown Stock'] ?? p?.godown ?? 0);
       const pStock = Number(p?.stock ?? p?.quantity ?? p?.qty ?? 0);
 
-      const shopStock = plShop > 0 ? plShop : pShop;
-      const godownStock = plGodown > 0 ? plGodown : pGodown;
-      const stock = (plStock > 0 ? plStock : pStock) || (shopStock + godownStock);
+      const shopStock = invShop !== undefined ? invShop : (plShop > 0 ? plShop : pShop);
+      const godownStock = invGodown !== undefined ? invGodown : (plGodown > 0 ? plGodown : pGodown);
+      let stock = 0;
+      if (invStock !== undefined && invStock > 0) {
+        stock = invStock;
+      } else if (shopStock + godownStock > 0) {
+        stock = shopStock + godownStock;
+      } else {
+        stock = (plStock > 0 ? plStock : pStock) || 0;
+      }
 
       return {
         ...item,
+        sku: item.sku || inv?.sku || '',
         shopStock,
         godownStock,
         stock,
@@ -316,6 +352,26 @@ export const updatePriceListItem = async (req: Request, res: Response): Promise<
 
     // Auto sync update to product
     await syncCategoriesAndProducts([item]);
+
+    // Auto sync update to Inventory collection
+    try {
+      const escapedOldName = oldItem.itemName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      await Inventory.updateMany(
+        { productName: { $regex: new RegExp(`^${escapedOldName}$`, 'i') } },
+        {
+          ...(item.itemName && { productName: item.itemName.trim() }),
+          ...(item.category && { category: item.category }),
+          ...(item.unit && { unit: item.unit }),
+          ...(item.rate !== undefined && { rate: Number(item.rate) }),
+          ...(item.mrp !== undefined && { mrp: Number(item.mrp) }),
+          ...(item.shopStock !== undefined && { shopStock: Number(item.shopStock) }),
+          ...(item.godownStock !== undefined && { godownStock: Number(item.godownStock) }),
+          ...(item.stock !== undefined && { totalStock: Number(item.stock), stock: Number(item.stock) }),
+        }
+      );
+    } catch (invErr) {
+      console.warn('[PriceList Update Inventory Sync Warning]:', invErr);
+    }
 
     res.status(200).json({ success: true, data: item });
   } catch (error: any) {

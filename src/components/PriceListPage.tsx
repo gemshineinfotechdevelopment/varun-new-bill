@@ -199,15 +199,17 @@ export const PriceListPage: FC = () => {
 
           const plShop = Number(item.shopStock ?? item.shop_stock ?? item.shop ?? 0) || 0;
           const plGodown = Number(item.godownStock ?? item.godown_stock ?? item.godown ?? 0) || 0;
-          const plTotal = Number(item.stock ?? item.quantity ?? item.qty ?? 0) || (plShop + plGodown);
+          const plTotal = Number(item.stock ?? item.quantity ?? item.qty ?? 0) || 0;
 
           const pShop = Number(p?.shopStock ?? p?.shop_stock ?? p?.shop ?? 0) || 0;
           const pGodown = Number(p?.godownStock ?? p?.godown_stock ?? p?.godown ?? 0) || 0;
-          const pTotal = Number(p?.stock ?? p?.quantity ?? p?.qty ?? 0) || (pShop + pGodown);
+          const pTotal = Number(p?.stock ?? p?.quantity ?? p?.qty ?? 0) || 0;
 
           const shopStock = plShop > 0 ? plShop : pShop;
           const godownStock = plGodown > 0 ? plGodown : pGodown;
-          const totalStock = (plTotal > 0 ? plTotal : pTotal) || (shopStock + godownStock);
+          const totalStock = (shopStock + godownStock > 0)
+            ? (shopStock + godownStock)
+            : (plTotal > 0 ? plTotal : (pTotal > 0 ? pTotal : 0));
 
           return {
             ...item,

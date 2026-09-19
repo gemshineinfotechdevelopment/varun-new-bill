@@ -4,10 +4,11 @@ import { AccountLedger } from '../models/AccountLedger';
 import { Customer } from '../models/Customer';
 import PriceList from '../models/PriceList';
 import { Product } from '../models/Product';
+import { Inventory } from '../models/Inventory';
 import { escapeRegex, recalculateCustomerBalance } from '../utils/ledgerUtils';
 import { isCloudinaryConfigured, uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 
-// Helper to decrement (multiplier: -1) or increment/restore (multiplier: +1) shopStock and total stock in PriceList and Product collections
+// Helper to decrement (multiplier: -1) or increment/restore (multiplier: +1) shopStock and total stock in Inventory, PriceList, and Product collections
 const adjustStock = async (products: any[], multiplier: number): Promise<void> => {
   if (!Array.isArray(products) || products.length === 0) return;
 
@@ -18,12 +19,52 @@ const adjustStock = async (products: any[], multiplier: number): Promise<void> =
     const qty = isNaN(rawQty) ? 0 : rawQty;
 
     if (cleanName && qty !== 0) {
-      const change = qty * multiplier;
       const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const nameRegex = new RegExp(`^${escapedName}$`, 'i');
 
       try {
-        // Adjust in PriceList collection
+        // 1. Adjust in Inventory collection (Live multi-project stock)
+        const inventoryItems = await Inventory.find({
+          $or: [
+            { productName: { $regex: nameRegex } },
+            ...(item.sku ? [{ sku: item.sku }] : [])
+          ]
+        });
+
+        for (const invItem of inventoryItems) {
+          const currentShop = Number(invItem.shopStock ?? (invItem as any).shop_stock ?? 0);
+          const currentGodown = Number(invItem.godownStock ?? (invItem as any).godown_stock ?? 0);
+          let newShop = currentShop;
+          let newGodown = currentGodown;
+
+          if (multiplier < 0) {
+            // Deducting stock on sale
+            if (currentShop >= qty) {
+              newShop = currentShop - qty;
+            } else if (currentShop > 0) {
+              const remaining = qty - currentShop;
+              newShop = 0;
+              newGodown = Math.max(0, currentGodown - remaining);
+            } else if (currentGodown > 0) {
+              newGodown = Math.max(0, currentGodown - qty);
+            } else {
+              newShop = currentShop - qty;
+            }
+          } else {
+            // Restoring stock on delete/edit
+            newShop = currentShop + qty;
+          }
+
+          const newTotal = newShop + newGodown;
+          await Inventory.findByIdAndUpdate(invItem._id, {
+            shopStock: newShop,
+            godownStock: newGodown,
+            totalStock: newTotal,
+            stock: newTotal,
+          });
+        }
+
+        // 2. Adjust in PriceList collection
         const priceItems = await PriceList.find({ itemName: { $regex: nameRegex } });
         for (const pItem of priceItems) {
           const currentShop = Number(pItem.shopStock ?? (pItem as any).shop_stock ?? 0);
@@ -57,7 +98,7 @@ const adjustStock = async (products: any[], multiplier: number): Promise<void> =
           });
         }
 
-        // Adjust in Product collection
+        // 3. Adjust in Product collection
         const productItems = await Product.find({ name: { $regex: nameRegex } });
         for (const pItem of productItems) {
           const currentShop = Number(pItem.shopStock ?? (pItem as any).shop_stock ?? 0);
