@@ -171,7 +171,7 @@ export const AllCustomersPage: FC<AllCustomersPageProps> = ({
   const fetchRecentBills = async () => {
     try {
       setLoadingRecentBills(true);
-      const bills = await ParticularsApi.getAll(undefined, 'REGULAR');
+      const bills = await ParticularsApi.getAll();
       const regularOnly = Array.isArray(bills)
         ? bills.filter((b: any) => !isGstBillRecord(b))
         : [];

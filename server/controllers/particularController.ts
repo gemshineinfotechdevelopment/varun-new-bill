@@ -148,7 +148,20 @@ export const getParticulars = async (req: Request, res: Response, next: NextFunc
       filter.customerName = { $regex: new RegExp(`^${escapeRegex(customerName.trim())}$`, 'i') };
     }
     if (billType && typeof billType === 'string' && billType.trim() !== '' && billType.toUpperCase() !== 'ALL') {
-      filter.billType = billType.toUpperCase();
+      const typeUpper = billType.toUpperCase();
+      if (typeUpper === 'REGULAR') {
+        filter.billType = { $ne: 'GST' };
+        filter.billNo = { $not: /^GST/i };
+        filter.notes = { $not: /^\[GST_BILL\]/i };
+      } else if (typeUpper === 'GST') {
+        filter.$or = [
+          { billType: 'GST' },
+          { billNo: /^GST/i },
+          { notes: /^\[GST_BILL\]/i },
+        ];
+      } else {
+        filter.billType = typeUpper;
+      }
     }
 
     const particulars = await Particular.find(filter).sort({ createdAt: -1, _id: -1 });
