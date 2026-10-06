@@ -857,7 +857,7 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
                     }}
                   >
                     {isGstBill && (
-                      <div style={{ fontSize: '13px', fontWeight: 900, color: '#801414' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 900, color: '#801414' }}>
                         E & O.E
                       </div>
                     )}
@@ -884,11 +884,11 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
                       return (
                         <div
                           style={{
-                            fontSize: '13px',
-                            fontWeight: 800,
+                            fontSize: '18px',
+                            fontWeight: 900,
                             color: '#801414',
-                            marginTop: '4px',
-                            lineHeight: 1.45,
+                            marginTop: '5px',
+                            lineHeight: 1.35,
                             whiteSpace: 'pre-wrap',
                             wordBreak: 'break-word',
                           }}

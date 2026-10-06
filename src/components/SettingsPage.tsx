@@ -1164,8 +1164,8 @@ export const SettingsPage: React.FC = () => {
                     placeholder="e.g. Subject to Sivakasi Jurisdiction / Goods once sold will not be taken back"
                     helperText="This text will be printed ONLY on GST Bills below E & O.E. Normal (Estimate) bills will NOT print these terms."
                     sx={{
-                      '& .MuiInputBase-input': { fontSize: '14.5px', fontWeight: 600, lineHeight: 1.6 },
-                      '& .MuiFormHelperText-root': { fontSize: '11.5px', color: '#059669', fontWeight: 600 },
+                      '& .MuiInputBase-input': { fontSize: '18px', fontWeight: 700, lineHeight: 1.5, color: '#991B1B' },
+                      '& .MuiFormHelperText-root': { fontSize: '12px', color: '#059669', fontWeight: 600 },
                     }}
                   />
                 </Grid>

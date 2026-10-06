@@ -332,7 +332,7 @@ export const generateBillHtml = (bill: BillPrintData): string => {
         <!-- Row 1: TOTAL -->
         <tr>
           <td colspan="3" rowspan="${isGstBill ? 5 : 2}" style="border: 1px solid #801414; vertical-align: bottom; padding: 5px 10px; text-align: left;">
-            ${isGstBill ? `<div style="font-size: 13px; font-weight: 900; color: #801414;">E & O.E</div>` : ''}
+            ${isGstBill ? `<div style="font-size: 16px; font-weight: 900; color: #801414;">E & O.E</div>` : ''}
             ${pageIndex > 0 ? `
               <div style="font-size: 11px; font-weight: 800; color: #801414; margin-top: 3px; line-height: 1.35;">
                 <div>${pageIndex === 1 ? 'Page 1 Total B/F' : `Pages 1-${pageIndex} Total B/F`} : &#8377;${splitRsPs(prevCumulativeSubtotal).rs}.${splitRsPs(prevCumulativeSubtotal).ps}</div>
@@ -353,7 +353,7 @@ export const generateBillHtml = (bill: BillPrintData): string => {
               const billNotesClean = (bill.notes || '').replace(/^\[GST_BILL\]\s*/, '').trim();
               const displayNotes = settingsTerms || billNotesClean || '';
               return displayNotes ? `
-                <div style="font-size: 13px; font-weight: 800; color: #801414; margin-top: 4px; line-height: 1.45; white-space: pre-wrap; word-break: break-word;">
+                <div style="font-size: 18px; font-weight: 900; color: #801414; margin-top: 5px; line-height: 1.35; white-space: pre-wrap; word-break: break-word;">
                   ${displayNotes}
                 </div>
               ` : '';
