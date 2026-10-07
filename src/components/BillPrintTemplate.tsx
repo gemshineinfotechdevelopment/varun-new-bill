@@ -171,9 +171,9 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
 
         const getItemAmount = (p: BillPrintProduct): number => {
           const rawRate = p.rate !== undefined && p.rate !== null ? String(p.rate).replace(/,/g, '').trim() : '';
-          const numRate = !isNaN(Number(rawRate)) ? parseFloat(rawRate) : 0;
+          const numRate = parseFloat(rawRate) || 0;
           const rawQty = p.quantity !== undefined && p.quantity !== null ? String(p.quantity).replace(/,/g, '').trim() : '';
-          const numQty = !isNaN(Number(rawQty)) ? parseFloat(rawQty) : 0;
+          const numQty = parseFloat(rawQty) || 0;
           if (numRate > 0 && numQty > 0) {
             return numRate * numQty;
           }
@@ -667,7 +667,7 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
                   <th
                     rowSpan={2}
                     style={{
-                      width: '47%',
+                      width: isGstBill ? '44%' : '47%',
                       border: '1px solid #801414',
                       padding: '5px 8px',
                       textAlign: 'center',
@@ -680,7 +680,7 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
                   <th
                     rowSpan={2}
                     style={{
-                      width: '12%',
+                      width: isGstBill ? '15%' : '12%',
                       border: '1px solid #801414',
                       padding: '5px 4px',
                       textAlign: 'center',
@@ -755,6 +755,15 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
                     ? numRate * numQty
                     : (parseFloat(String(item.amount).replace(/,/g, '')) || 0);
                   const amtSplit = splitRsPs(numAmt);
+                  const rawQtyStr = item.quantity !== undefined && item.quantity !== null ? String(item.quantity).trim() : '';
+                  let displayQty = rawQtyStr;
+                  if (isGstBill && rawQtyStr !== '') {
+                    if (/c[ao]rton\s*box/i.test(rawQtyStr)) {
+                      displayQty = rawQtyStr;
+                    } else {
+                      displayQty = `${rawQtyStr} carton box`;
+                    }
+                  }
                   return (
                     <tr key={idx} style={{ height: '24px' }}>
                       <td
@@ -786,10 +795,12 @@ export const BillPrintTemplate: React.FC<BillPrintTemplateProps> = ({ bill }) =>
                           textAlign: 'center',
                           padding: '3px 4px',
                           fontWeight: 700,
+                          fontSize: isGstBill ? '11px' : '12.5px',
+                          whiteSpace: 'nowrap',
                           color: '#000000',
                         }}
                       >
-                        {item.quantity || ''}
+                        {displayQty}
                       </td>
                       <td
                         style={{

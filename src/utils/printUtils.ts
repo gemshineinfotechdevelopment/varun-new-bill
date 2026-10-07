@@ -171,9 +171,9 @@ export const generateBillHtml = (bill: BillPrintData): string => {
 
   const getItemAmount = (p: any): number => {
     const rawRate = p.rate !== undefined && p.rate !== null ? String(p.rate).replace(/,/g, '').trim() : '';
-    const numRate = !isNaN(Number(rawRate)) ? parseFloat(rawRate) : 0;
+    const numRate = parseFloat(rawRate) || 0;
     const rawQty = p.quantity !== undefined && p.quantity !== null ? String(p.quantity).replace(/,/g, '').trim() : '';
-    const numQty = !isNaN(Number(rawQty)) ? parseFloat(rawQty) : 0;
+    const numQty = parseFloat(rawQty) || 0;
     if (numRate > 0 && numQty > 0) {
       return numRate * numQty;
     }
@@ -289,6 +289,15 @@ export const generateBillHtml = (bill: BillPrintData): string => {
             ? numRate * numQty
             : (parseFloat(String(item.amount).replace(/,/g, '')) || 0);
           const amtSplit = splitRsPs(numAmt);
+          const rawQtyStr = item.quantity !== undefined && item.quantity !== null ? String(item.quantity).trim() : '';
+          let displayQty = rawQtyStr;
+          if (isGstBill && rawQtyStr !== '') {
+            if (/c[ao]rton\s*box/i.test(rawQtyStr)) {
+              displayQty = rawQtyStr;
+            } else {
+              displayQty = `${rawQtyStr} carton box`;
+            }
+          }
           return `
             <tr style="height: 24px;">
               <td style="border: 1px solid #801414; text-align: center; padding: 3px 6px; font-weight: 700; font-size: 12.5px; color: #000000;">
@@ -297,8 +306,8 @@ export const generateBillHtml = (bill: BillPrintData): string => {
               <td style="border: 1px solid #801414; text-align: left; padding: 3px 10px; font-weight: 700; color: #000000;">
                 ${item.particular || '-'}
               </td>
-              <td style="border: 1px solid #801414; text-align: center; padding: 3px 4px; font-weight: 700; color: #000000;">
-                ${item.quantity || ''}
+              <td style="border: 1px solid #801414; text-align: center; padding: 3px 4px; font-weight: 700; font-size: ${isGstBill ? '11px' : '12.5px'}; white-space: nowrap; color: #000000;">
+                ${displayQty}
               </td>
               <td style="border: 1px solid #801414; text-align: right; padding: 3px 6px; font-weight: 700; font-size: 12.5px; color: #000000;">
                 ${numRate > 0 ? numRate.toFixed(2) : ''}
@@ -641,10 +650,10 @@ export const generateBillHtml = (bill: BillPrintData): string => {
                 <th rowspan="2" style="width: 7%; border: 1px solid #801414; padding: 5px 4px; text-align: center; font-weight: 900; font-size: 14px;">
                   S.No
                 </th>
-                <th rowspan="2" style="width: 47%; border: 1px solid #801414; padding: 5px 8px; text-align: center; font-weight: 900; font-size: 14px;">
+                <th rowspan="2" style="width: ${isGstBill ? '44%' : '47%'}; border: 1px solid #801414; padding: 5px 8px; text-align: center; font-weight: 900; font-size: 14px;">
                   Particulars
                 </th>
-                <th rowspan="2" style="width: 12%; border: 1px solid #801414; padding: 5px 4px; text-align: center; font-weight: 900; font-size: 14px;">
+                <th rowspan="2" style="width: ${isGstBill ? '15%' : '12%'}; border: 1px solid #801414; padding: 5px 4px; text-align: center; font-weight: 900; font-size: 14px;">
                   Quantity
                 </th>
                 <th rowspan="2" style="width: 14%; border: 1px solid #801414; padding: 5px 4px; text-align: center; font-weight: 900; font-size: 14px;">
